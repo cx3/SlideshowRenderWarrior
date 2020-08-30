@@ -1,0 +1,129 @@
+
+        to_frame = self.total_slide_duration if to_frame == -1 else to_frame
+        frame_step = 1 if from_frame > to_frame else -1 
+        
+        if frame_resolution == (-1, -1):
+            frame_resolution = self.frame_resolution
+        
+        print('\n\nWIZARD SLIDESHOW :: RENDER_PROJECT() \n')
+        print('frames to render: ', self.total_slide_duration, '\t\thas_more', self.slide_frames.has_more())
+
+        transition_frame_pos = -1
+
+        current_image_traveller_instance = None
+        current_image_traveller_index = -1
+        current_transition_instance: trans.Transition or None = None
+
+        next_image_traveller_instance = None
+        next_image_traveller_index = -1
+
+        print('total_slide_duration: ', self.total_slide_duration)
+
+        for current_frame_index in range(from_frame, to_frame, frame_step):
+            self.global_frame_index = current_frame_index
+            print('\n[ ' + '$$$' * 33 + ' ]')
+            print('RENDER_PROJECT ITERATION global_frame_index: ', self.global_frame_index)
+
+            image_inst, image_id = self.pick_image_for_frame(current_frame_index)
+
+            result_rendered_frame_dict = self.slide_frames.next_frame(
+                im1=image_inst
+            )
+
+            traveller_dict, traveller_index = self.pick_image_traveller(self.global_frame_index)
+
+            if traveller_dict is not None and traveller_index != -1:
+                if traveller_index != current_image_traveller_index:
+                    current_image_traveller_instance = None
+
+                if current_image_traveller_instance is None:
+                    if len(result_rendered_frame_dict['to_save']) == 2:
+                        result_rendered_frame_dict['to_save'] = result_rendered_frame_dict['to_save'][0]
+
+                    print('\n\n>>>>>> render project: new image traveller instance')
+                    current_image_traveller_instance = traveller_dict['traveller'](
+                        image=result_rendered_frame_dict['to_save'],  # self.last_rendered_frame
+                        frames_count=traveller_dict['stop'] - traveller_dict['start'],
+                        frame_resolution=self.frame_resolution
+                    )
+                    current_image_traveller_index = traveller_index
+                    # input('Enter kurwa')
+
+                if current_image_traveller_instance is not None:
+                    print('\t\t\tImageTaveller next_frame')
+                    result_rendered_frame_dict = current_image_traveller_instance.next_frame(
+                        im1=result_rendered_frame_dict['to_save']
+                    )
+
+            # ------------------------------------------------------------------------------------------
+            # Assign transition if global_frame_index is in transition timing
+            
+            selected_trans = self.while_transition()
+            if isinstance(selected_trans, dict):
+                print('\t\trender_project: assigning transition')
+                
+                # PICK SECOND TRAVELLER START
+                
+                next_traveller_dict, next_traveller_index = self.pick_next_image_traveller(self.global_frame_index)
+
+                if next_traveller_dict is not None and next_traveller_index != -1:
+                    if next_traveller_index != next_image_traveller_index:
+                        next_image_traveller_instance = None
+
+                    if next_image_traveller_instance is None:
+                        if len(result_rendered_frame_dict['to_save']) == 2:
+                            result_rendered_frame_dict['to_save'] = result_rendered_frame_dict['to_save'][0]
+
+                        print('\n\n>>>>>> render project: SECOND image traveller instance')
+                        next_image_traveller_instance = next_traveller_dict['traveller'](
+                            image=utils.verify_alpha_channel(self.image_handlers[selected_trans['nr'] + 1].get_image()),  
+                            frames_count=next_traveller_dict['stop'] - next_traveller_dict['start'],
+                            frame_resolution=self.frame_resolution
+                        )
+                        next_image_traveller_index = next_traveller_index
+                        # input('Enter kurwa')
+
+                    if next_image_traveller_instance is not None:
+                        print('\t\t\tImageTaveller next_frame')
+                        result_rendered_frame_dict = next_image_traveller_instance.next_frame(
+                            im1=result_rendered_frame_dict['to_save']
+                        )
+                
+                # PICK SECOND TRAVELLER STOP   
+            
+                selected_trans: dict
+                transition_frame_pos += 1
+
+                if current_transition_instance is None:
+                    print('\n' + '$%$^&' * 10 + '\n\tINSTANTIATING TRANSITION', current_transition_instance)
+                    # CREATE INSTANCE
+                    current_transition_instance = selected_trans['transition'](
+                        image1=utils.verify_alpha_channel(result_rendered_frame_dict['to_save']),
+                        image2=),
+                        frames_count=abs(selected_trans['stop'] - selected_trans['start'])
+                    )
+
+                if hasattr(current_transition_instance, 'next_frame'):
+                    # condition must be met!
+                    print('\t>>>>>>>>>>>\tTRANSITING KURWA')
+                    result_rendered_frame_dict = current_transition_instance.next_frame(
+                        im1=utils.verify_alpha_channel(self.image_handlers[selected_trans['nr']].get_image()),
+                        im2=utils.verify_alpha_channel(self.image_handlers[selected_trans['nr'] + 1].get_image()),
+                        frame_resolution=self.frame_resolution
+                    )
+                    self.image_handlers[selected_trans['nr']].set_image(result_rendered_frame_dict['to_save'])
+                    # input('ENTER KURWA JEBANA')
+                else:
+                    raise AttributeError(str(type(current_transition_instance)))
+
+            else:
+                current_transition_instance = None
+                transition_frame_pos = -1
+
+            if frame_resolution != self.frame_resolution:
+                sdfdfresult_rendered_frame_dict['to_save']
+
+            utils.save_image(result_rendered_frame_dict['to_save'], f'rendered/{self.global_frame_index}.jpg')
+            # print(nf.keys())
+            print('=' * 44 + ' RENDER_FRAME_ITERATION FINISHED ' + '=' * 44)
+            # input('enter...')
