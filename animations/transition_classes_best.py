@@ -5,7 +5,7 @@ import numpy as np
 import PIL.Image as PilImage
 import PIL
 
-import utils
+from common import utils
 from videoclip import RenderControllers
 
 from animations.Transitions_v2 import image_types, create_empty_callbacks_cl, NextFrame

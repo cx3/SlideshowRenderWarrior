@@ -1,13 +1,154 @@
+# !/python38
+# Python's STL
 from __future__ import annotations
+# import time
 from copy import deepcopy
-from typing import Callable, List, Tuple, Type
-from inspect import isclass
+from typing import Callable, List, Tuple, Dict
 
+# Third party imports
+import cv2
+import numpy
+import PIL.Image
+
+# RenderWarrior imports
 from common import utils
+import effects.cv_effects as cv_effects
 from animations.Transitions_v2 import NextFrame
+from common.UuidController import UuidController
 
 
 image_types = utils.image_types
+
+
+class ImageHandler:
+
+    _loaded_instances: List[dict] = []
+
+    def __init__(
+            self,
+            full_path: str,
+            image_type: utils.image_types = numpy.ndarray,
+            **kwargs):
+        """
+
+        :param full_path: full path to image on drive
+        :param image_type: PIL.Image.Image or numpy.ndarray
+        :keyword kwargs:
+            :key load: loads image to RAM, pass True value for it
+            :key resolution: tuple (width, height) that tells to handle rescaled image
+            :key frame_indexes: list/tuple of ints describing positions on timeline where image should occur
+            :key uid_setter: instance of such class with method set_next_uid() -> str
+        """
+
+        kwargs['frame_indexes'] = kwargs.get('frame_indexes', [0])
+        self.init_params = locals()
+
+        self.image = False if not kwargs.get('load', False) else utils.load_image(
+            image_or_path=full_path,
+            result_type=image_type
+        )
+
+        if 'resolution' in kwargs:
+            if self.image is not False:
+                self.image = utils.load_image(self.image, numpy.ndarray)
+                size = utils.get_image_size(self.image)
+                if size != kwargs['resolution']:
+                    print('ImageHandler resize resolution to', kwargs['resolution'])
+                    input('enter...')
+                    self.image = cv2.resize(self.image, kwargs['resolution'])
+
+                self.image = utils.convert_image_type(self.image, image_type)
+
+        ImageHandler._loaded_instances.append(
+            UuidController.set_uid(self)
+        )
+
+    def __str__(self):
+        return str(self.init_params)
+
+    def get_image(self):
+        if self.image is None or self.image is False:
+            self.reload()
+        print(f'>> StillImage.get_image() returns value of {type(self.image)}')
+        return self.image
+
+    def set_image(self, image_inst):
+        curr_size = utils.get_image_size(self.image)
+        next_size = utils.get_image_size(image_inst)
+
+        if curr_size != next_size:
+            image_inst = cv2.resize(utils.convert_image_type(image_inst, numpy.ndarray), curr_size)
+            image_inst = utils.convert_image_type(image_inst, type(image_inst))
+
+        self.image = image_inst
+
+    def dismiss_image(self):
+        del self.image
+        self.image = None
+
+    def reload(self, **kwargs) -> True or utils.image_types:
+        """
+        Reloads image from drive with other params than in __init__
+        :keyword kwargs:
+            :key image_type:  PIL.Image.Image or numpy.ndarray, or passed in __init__
+            :key resolution:  new resolution or passed in __init__
+            :key return_image: if passed and set to True, method returns reloaded image, else returns True
+        :return: look above
+        """
+        self.image = utils.load_image(self.init_params['full_path'], self.init_params['image_type'])
+        resolution = self.init_params['kwargs']['resolution']
+        image_type = kwargs.get('image_type', self.init_params['image_type'])
+
+        if kwargs.get('resolution', None) is not None:
+            resolution = kwargs['resolution']
+
+        if resolution is not None:
+            print('ImageHandler reloading, resize to', resolution)
+            loaded_image_size = utils.get_image_size(self.image)
+            if loaded_image_size != resolution:
+                self.image = utils.convert_image_type(
+                    source_image=cv_effects.cut_rect(
+                        image=self.image,
+                        src_box=(0, 0, *loaded_image_size),
+                        size=resolution
+                    ),
+                    dest_type=image_type
+                )
+        self.init_params['reload_params'] = kwargs
+        if kwargs.get('return_image', None) is not None:
+            return self.image
+        return True
+
+
+class OnTimingChanged:
+    main_timeline_instance: TimelineController
+    not_listened_methods = []
+
+    @staticmethod
+    def do_on_change():
+        OnTimingChanged.main_timeline_instance.stabilize_transitions()
+
+
+# https://stackoverflow.com/questions/6307761/how-to-decorate-all-functions-of-a-class-without-typing-it-over-and-over-for-eac
+# https://github.com/davegallant/decorate-all-methods/blob/master/decorate_all_methods/__init__.py
+# https://www.codementor.io/@sheena/advanced-use-python-decorators-class-function-du107nxsv
+
+
+def on_timing_changed_listener(decorator=OnTimingChanged.do_on_change):
+    def decorate(cls):
+        for next_attr in cls.__dict__:
+            if callable(getattr(cls, next_attr)) and next_attr not in OnTimingChanged.not_listened_methods:
+                decorator: Callable
+                setattr(cls, next_attr, decorator(getattr(cls, next_attr)))
+        return cls
+    return decorate
+
+
+def do_not_listen(method: Callable):
+    if callable(method):
+        if method not in OnTimingChanged.not_listened_methods:
+            OnTimingChanged.not_listened_methods.append(method)
+    return method
 
 
 class KeyedEffect(NextFrame):
@@ -59,8 +200,6 @@ class KeyedEffect(NextFrame):
 
         if not isinstance(effect_fun_ptr, utils.Callback) and not callable(effect_fun_ptr):
             raise TypeError('param effect_fun_ptr is not Callback nor callable')
-        '''if 'effect' not in effect_fun_ptr.__name__:
-            raise AttributeError('effect_fun_ptr seems not to be an effect function')'''
         if not isinstance(frames_count, int):
             if frames_count is not None:
                 raise TypeError('frames_count must be int > 0')
@@ -118,29 +257,13 @@ class KeyedEffect(NextFrame):
         self.last_frame_index = -1
         self.last_frame_rendered = None
 
+        UuidController.set_uid(self)
+
     def is_turned(self) -> bool:
         return self.turned_on
 
     def set_turn_state(self, state: bool):
         self.turned_on = state
-
-    def set_uid(self, uid_setter_instance) -> True or ValueError:
-        if hasattr(self, '_uid'):
-            raise ValueError('uid was already set')
-        if hasattr(uid_setter_instance, 'set_next_uid'):
-            if callable(uid_setter_instance.set_next_uid):
-                setattr(self, '_uid', uid_setter_instance.set_next_uid())
-                setattr(self, '_last_uid_setter', uid_setter_instance)
-                return True
-        raise ValueError('incorrect parameter uid_setter_instance has no function set_next_uid()')
-
-    def has_uid(self) -> bool:
-        return hasattr(self, '_uid')
-
-    def get_uid(self) -> str or AttributeError:
-        if hasattr(self, '_uid'):
-            return getattr(self, '_uid')
-        raise AttributeError('uid was not set')
 
     def has_more(self) -> bool:  # wtf?
         # return self.last_frame_index + 1 > self.key_frames[0]['values'].has_more()
@@ -179,53 +302,6 @@ class KeyedEffect(NextFrame):
     def __str__(self) -> str:
         return f'<KeyedEffect>\n\t{self.__dict__}\n</KeyedEffect>\n'
 
-    # UNTESTED
-    def copy(self) -> KeyedEffect:
-        # getattr(self, '_last_uid_setter', uid_setter_instance)  ??
-        """return type(self).__init__(
-            effect_fun_ptr=self.call_back,
-            frames_count=self.frames_count,
-            **self.key_frames
-        )"""
-        return deepcopy(self)
-
-    # UNTESTED
-    def to_other_keyed_effect(
-            self,
-            new_effect_type: Type[KeyedEffect] or KeyedEffect,
-            copy_prev_cb_params: bool = True,
-            **new_params) -> KeyedEffect:
-
-        # getattr(self, '_last_uid_setter', uid_setter_instance)  ??
-
-        if not isclass(new_effect_type):
-            new_effect_type: Type = new_effect_type.__class__
-
-        if issubclass(new_effect_type, KeyedEffect):
-            if type(new_effect_type) is type(self):
-                return self.copy()
-            result = type(self)(
-                self.call_back,  # effect_fun_ptr=
-                self.frames_count,  # frames_count=
-                **new_params
-            )
-            if copy_prev_cb_params:
-                result.key_frames.extend(deepcopy(self.key_frames))
-            return result
-
-        raise TypeError
-
-    # @staticmethod
-    # UNTESTED !!!
-    def from_other(self, other: KeyedEffect) -> KeyedEffect:
-        if not isinstance(other, KeyedEffect):
-            raise TypeError
-        '''if isinstance(other, KeyedEffect):
-            for field in 'call_back,frames_count,key_frames,last_frame_index,need_params,turned_on'.split(','):
-                setattr(self, field, deepcopy(getattr(other, field)))'''
-        self.__dict__ = other.__dict__
-        return self
-
 
 # UNTESTED
 class KeyedEffectsStack(NextFrame):
@@ -257,6 +333,8 @@ class KeyedEffectsStack(NextFrame):
         self.add(*keyed_effects_args)
         self.kwargs = kwargs
         self.last_frame_rendered = None
+
+        UuidController.set_uid(some=self)
 
     def get_keyed_effects_stack(self):
         return self.keyed_effects_stack
@@ -298,6 +376,7 @@ class KeyedEffectsStack(NextFrame):
             self.keyed_effects_stack.append(next_arg)
             print(f'KeyedEffectsStack::add  -  added {type(next_arg)}')
         print(f'KeyedEffectsStack::add() - max_len is not {self.frames_length}')
+        self.frames_length = self.get_frames_length()
         return self
 
     def get_used_effects_list(self, as_copy=False) -> List[KeyedEffect]:
@@ -339,9 +418,6 @@ class KeyedEffectsStack(NextFrame):
 
     def __str__(self):
         return f'<KeyedEffectsStack>\n{"".join(str(_) for _ in self.keyed_effects_stack)}\n</KeyedEffectsStack>'
-
-    def __repr__(self):
-        return str(self)
 
     def has_more(self):
         print('KeyedEffectsStack.has_more():  frame_index', self.frame_index, 'frames_length', self.frames_length)
@@ -409,24 +485,128 @@ class KeyedEffectsStack(NextFrame):
         return self.last_frame_rendered
 
 
-class StillImage(KeyedEffect):
-    def __init__(self, frames_count: int, image: Callable or utils.Callback or utils.image_types, **cb_params_key):
-        self.image = image
-        def image_getter_effect(**kwargs):
-            kwargs['to_save'] = kwargs['image'] = self.image
-            return kwargs['image']
-        super(StillImage, self).__init__(effect_fun_ptr=image_getter_effect, frames_count=frames_count, **cb_params_key)
+class TimelineModelElement:
+    ...
 
-    def next_frame(self, im1: image_types, frame_index: int = -1, **params) -> dict:
-        params = locals()
-        if frame_index == -1 or frame_index is None:
-            frame_index = self.last_frame_index
-        frame_index += 1
-        self.last_frame_index = frame_index
-        if frame_index > self.frames_count:
-            raise IndexError()
-        params['to_save'] = self.image if im1 is None else self.image
-        if callable(params['to_save']) or isinstance(params['to_save'], utils.Callback):
-            params['to_save'] = params['to_save']()
-        self.last_frame_rendered = params['to_save']
-        return params
+
+class TimelineElement(TimelineModelElement):
+    def __init__(self, **kwargs):
+        self.start_frame = kwargs.get('start_pos', 0)
+        self.frames_duration = kwargs.get('frames_duration', 100)
+
+        not_none_key_name, value = None, None
+        for next_key in ('image', 'image_handler', 'image_fun_getter', 'image_cb_getter',):
+            if next_key in kwargs:
+                not_none_key_name, value = next_key, kwargs[next_key]
+                break
+
+        if not_none_key_name is None and value is None:
+            raise TypeError
+
+        image = None
+        if not_none_key_name == 'image':
+            if isinstance(value, (PIL.Image.Image, numpy.ndarray)):
+                image = value
+        elif not_none_key_name == 'image_handler':
+            if hasattr(value, 'get_image'):
+                if callable(value.get_image):
+                    image = value.get_image()
+        elif not_none_key_name == 'image_fun_getter':
+            if callable(value):
+                image = value()
+                if not isinstance(image, (PIL.Image.Image, numpy.ndarray)):
+                    image = None
+        elif not_none_key_name == 'image_cb_getter':
+            if isinstance(value, utils.Callback):
+                image = value.__call__()
+        else:
+            raise TypeError('kwargs must-have-keys error')
+
+        self.image = image
+        self.keyed_effect_stack = None
+
+        kes = kwargs.get('keyed_effects_stack', None)
+        if kes is not None:
+            if isinstance(kes, KeyedEffectsStack):
+                self.keyed_effect_stack = kwargs['KeyedEffectsStack']
+        else:
+            def still_effect():
+                return self.image
+
+            self.keyed_effect_stack = KeyedEffectsStack(
+                KeyedEffect(effect_fun_ptr=still_effect, frames_count=self.frames_duration)
+            )
+
+        _ = self.keyed_effect_stack.get_frames_length()
+        if _ > self.frames_duration:
+            self.frames_duration = _
+        UuidController.set_uid(self)
+
+    def __len__(self):
+        return self.keyed_effect_stack.get_frames_length()
+
+
+class TimelineController:
+    def __init__(self, *timeline_elements: TimelineElement, **kwargs):
+        self.timeline_elements: List[TimelineElement] = []
+        self.fps = kwargs.get('fps', 25)
+        self.frame_resolution = kwargs.get('frame_resolution', (1920, 1080))
+        self.default_transition_length = kwargs.get('default_transition_length', 100)
+        self.transitions_timing: List[Dict] = []
+        self.stabilized_transitions = False
+        self.add(*timeline_elements)
+
+    def add(self, *timeline_elements: List[int, TimelineElement]):
+        used_uids = []
+
+        for _ in timeline_elements:
+            if not isinstance(_, dict):
+                raise TypeError
+            if not isinstance(_, TimelineElement):
+                raise TypeError
+
+            uid = getattr(_, 'attached_uid')
+            if uid in used_uids:
+                raise ValueError
+            used_uids.append(uid)
+
+        self.timeline_elements = timeline_elements
+        self.transitions = []
+        self.stabilize_transitions()
+
+    def __len__(self):
+        return max(len(_) for _ in self.timeline_elements)
+
+    def stabilize_transitions(self):
+        if self.stabilized_transitions or len(self.timeline_elements) < 2:
+            return
+
+        timeline_elements = sorted(self.timeline_elements, key=lambda _: _.start_position)
+
+        diff = len(timeline_elements[0]) - self.default_transition_length
+
+        if diff < self.default_transition_length:
+            min_start_pos = len(timeline_elements[0])
+        else:
+            min_start_pos = diff
+
+        self.transitions_timing = []
+        for i in range(1, len(self.default_transition_length)):
+            timeline_elements[i].start_frame = min_start_pos
+
+            diff = len(timeline_elements[i]) - self.default_transition_length
+            len_e = len(timeline_elements[i])
+            if diff < self.default_transition_length:
+                min_start_pos += len_e
+            else:
+                min_start_pos += len_e - self.default_transition_length
+
+            self.transitions_timing.append({
+                'start': min_start_pos,
+                'length': min_start_pos + self.default_transition_length
+            })
+        self.timeline_elements = timeline_elements
+        self.stabilized_transitions = True
+
+    def swap_elements(self, pos_or_uid_first: int or str, pos_or_uid_second: int or str):
+        raise NotImplementedError

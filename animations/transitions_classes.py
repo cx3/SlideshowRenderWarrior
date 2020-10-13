@@ -8,10 +8,10 @@ import PIL.Image as PilImage
 import PIL
 
 # RenderWarrior
-import utils
+from common import utils
 
 from animations.Transitions_v2 import image_types, create_empty_callbacks_cl
-from animations.ImageTravels import ImageTravel, NextFrame
+from animations.ImageTravels import ImageTravel
 from effects.cv_effects import blend_images_effect
 
 

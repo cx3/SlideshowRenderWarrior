@@ -1,10 +1,10 @@
 import sys
-from typing import Type, List
+from typing import List
 from inspect import isclass, getmembers
 from random import shuffle
 
 import numpy as np
-import utils
+from common import utils
 import effects.cv_effects as cv_effects
 
 from animations.Transitions_v2 import image_types, NextFrame

@@ -1,0 +1,21 @@
+<TabbedView>:
+    size_hint: .75, .77
+    do_default_tab: False
+
+    TabbedPanelItem:
+        text: 'first tab'
+        Label:
+            text: 'First tab content area'
+    TabbedPanelItem:
+        text: 'tab2'
+        BoxLayout:
+            Label:
+                text: 'Second tab content area'
+            Button:
+                text: 'Button that does nothing'
+    TabbedPanelItem:
+        text: 'tab3'
+        RstDocument:
+            text:
+                '\\n'.join(("Hello world", "-----------",
+                "You are in the third tab."))

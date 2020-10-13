@@ -3,8 +3,7 @@ import numpy as np
 from PIL.Image import Image as PillowImage
 
 # Project imports
-import utils
-
+from common import utils
 
 # -+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-+*^-
 

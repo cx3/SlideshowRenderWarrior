@@ -4,7 +4,7 @@
 from collections import defaultdict
 
 # Project's imports
-import utils
+from common import utils
 
 # third party
 import numpy as np

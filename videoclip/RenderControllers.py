@@ -12,7 +12,7 @@ import cv2
 import numpy
 
 # RenderWarrior imports
-import utils
+from common import utils
 import effects.cv_effects as cv_effects
 import animations.transitions_classes as trans
 import animations.ImageTravels as Travels
@@ -146,28 +146,6 @@ class ImageHandler:
                     self.init_params['frame_indexes'].remove(index)
         else:
             raise ValueError
-
-
-class VideoSettings:
-    youtube_hd_24fps = {
-        'frame_resolution': (1280, 720),
-        'fps': 24
-    }
-
-    youtube_hd_25fps = {
-        'frame_resolution': (1280, 720),
-        'fps': 25
-    }
-
-    youtube_fhd_25fps = {
-        'frame_resolution': (1920, 1080),
-        'fps': 25
-    }
-
-    sd_24fps = {
-        'frame_resolution': (720, 576),
-        'fps': 24
-    }
 
 
 class TimelineModel:

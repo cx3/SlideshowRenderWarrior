@@ -4,8 +4,7 @@ from typing import Iterable
 import cv2
 import numpy as np
 
-import utils
-
+from common import utils
 
 image_types = utils.image_types
 verify_alpha_channel = utils.verify_alpha_channel

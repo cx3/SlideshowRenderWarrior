@@ -1,8 +1,6 @@
 # Python's STL
 from __future__ import annotations
 import os
-import copy
-import time
 import hashlib
 import datetime
 from typing import List, Type, Dict
@@ -12,12 +10,11 @@ import cv2
 import numpy
 
 # RenderWarrior imports
-import utils
+from common import utils
 import effects.cv_effects as cv_effects
 import videoclip.ClipUtils as ClipUtils
 import animations.transitions_classes as trans
 import animations.ImageTravels as Travels
-from animations.Transitions_v2 import NextFrame
 
 
 class ImageHandler:

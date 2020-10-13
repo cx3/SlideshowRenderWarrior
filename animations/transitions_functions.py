@@ -5,7 +5,7 @@ from time import time
 from PIL import Image, ImageEnhance, ImageFilter
 
 # Project imports
-from utils import _run_predicates
+from common.utils import _run_predicates
 from effects import pil_effects
 
 

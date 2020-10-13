@@ -7,7 +7,7 @@ from PIL import Image, ImageEnhance, ImageFilter
 from PIL.Image import Image as PillowImage
 
 # Project imports
-from utils import _run_predicates, CircleList
+from common.utils import _run_predicates, CircleList
 from effects import pil_effects
 
 

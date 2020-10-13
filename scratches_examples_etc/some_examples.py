@@ -1,7 +1,7 @@
 import PIL
 import numpy as np
 
-import utils
+from common import utils
 from effects import pil_effects
 import effects.cv_effects as eff
 
